@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "mechano-analyzer": {
+      "command": "python",
+      "args": [
+        "backend/gemini_service.py"
+      ],
+      "env": {
+        "PYTHONPATH": "backend"
+      }
+    }
+  }
+}
