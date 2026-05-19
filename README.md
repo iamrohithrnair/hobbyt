@@ -2,6 +2,12 @@
 
 **Hobbyt is an AI-powered robotics companion that lets you understand any robot's codebase in seconds and build new ones from a single sentence.** Drop in a `.zip` or a GitHub link and Hobbyt's Gemini-powered agent instantly maps the architecture, GPIO pins, control loops, and communication buses — then lets you migrate the entire project to a different board with one click. Or skip straight to creating: describe your robot in plain English and walk away with production-ready starter code, wiring diagrams, and a step-by-step build checklist. Powered by Google Gemini and the Agent Development Kit (ADK).
 
+## Demo
+
+<video src="./hobbyt-full-workflow-test.mp4" controls width="100%" title="Hobbyt full workflow demo"></video>
+
+[Watch the demo on YouTube](https://youtu.be/unC3Df3bH9Q)
+
 ---
 
 ## 🔄 What You Can Do with Hobbyt (Step-by-Step)
@@ -228,6 +234,7 @@ Hobbyt/
 ├── .gitignore             # Git ignore rules
 ├── setup.sh               # macOS/Linux setup script
 ├── setup.bat              # Windows setup script
+├── hobbyt-full-workflow-test.mp4 # Full workflow demo recording
 └── README.md              # This file
 ```
 
