@@ -45,6 +45,7 @@ env/
 # IDEs
 .vscode/
 .idea/
+.antigravitycli/
 *.swp
 *.swo
 *~

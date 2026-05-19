@@ -48,10 +48,40 @@ export default function App() {
 
   const steps = mode === 'analyze' ? analyzeSteps : generateSteps;
 
-  const analyzeTabs = remappedData
-    ? ['Architecture', 'Hardware map', 'Control flow', 'Comms', 'Risks', 'Onboarding', 'Starter Code']
+  const getCodebaseFiles = (data) => {
+    if (!data) return {};
+    const files = data.codebase_files || data.rebuilt_codebase || {};
+    if (files && typeof files === 'object' && Object.keys(files).length > 0) {
+      return files;
+    }
+    const starter = data.starter_code || data.alternative_starter_code;
+    return starter ? { 'starter_code': starter } : {};
+  };
+
+  const remappedCodebaseFiles = getCodebaseFiles(remappedData);
+  const activeResults = results && remappedData && showRemappedView ? {
+    ...results,
+    architecture: remappedData.architecture || results.architecture,
+    hardware_mapping: remappedData.hardware_mapping || results.hardware_mapping,
+    control_flow: remappedData.control_flow || results.control_flow,
+    communication: remappedData.communication || results.communication,
+    risks: remappedData.risks || results.risks,
+    onboarding_summary: remappedData.onboarding_summary || results.onboarding_summary,
+    folder_structure: remappedData.folder_structure || results.folder_structure,
+    pin_wiring: remappedData.pin_wiring || remappedData.alternative_pin_wiring || results.pin_wiring,
+    starter_code: remappedData.starter_code || remappedData.alternative_starter_code || results.starter_code,
+    readme: remappedData.readme || results.readme,
+    file_tree: remappedData.file_tree || Object.keys(remappedCodebaseFiles),
+    codebase_files: remappedCodebaseFiles
+  } : results;
+  const activeCodebaseFiles = getCodebaseFiles(activeResults);
+  const hasCodebaseFiles = Object.keys(activeCodebaseFiles).length > 0 || Object.keys(getCodebaseFiles(results)).length > 0 || Object.keys(remappedCodebaseFiles).length > 0;
+  const analyzeTabs = hasCodebaseFiles || remappedData
+    ? ['Architecture', 'Hardware map', 'Control flow', 'Comms', 'Risks', 'Onboarding', 'Codebase']
     : ['Architecture', 'Hardware map', 'Control flow', 'Comms', 'Risks', 'Onboarding'];
-  const generateTabs = ['Project structure', 'Pin wiring', 'Starter code', 'README'];
+  const generateTabs = hasCodebaseFiles || remappedData
+    ? ['Project structure', 'Pin wiring', 'Starter code', 'README', 'Codebase']
+    : ['Project structure', 'Pin wiring', 'Starter code', 'README'];
   const tabs = mode === 'analyze' ? analyzeTabs : generateTabs;
 
   const exampleChips = [
@@ -119,7 +149,7 @@ export default function App() {
               if (mode === 'analyze') {
                 setActiveTab(6);
               } else {
-                setActiveTab(1);
+                setActiveTab(4);
               }
               clearInterval(interval);
             } else if (data.status === 'failed') {
@@ -171,7 +201,7 @@ export default function App() {
 
   const handleAnalyze = async () => {
     if (!file && !githubUrl) return;
-    
+
     setRemappedData(null);
     setShowRemappedView(false);
     setRemapTarget('');
@@ -219,7 +249,7 @@ export default function App() {
 
   const handleGenerate = async () => {
     if (!projectDescription.trim()) return;
-    
+
     setRemappedData(null);
     setShowRemappedView(false);
     setRemapTarget('');
@@ -263,14 +293,14 @@ export default function App() {
 
   const handleRemap = async () => {
     if (!remapTarget.trim() || !results) return;
-    
+
     setIsRemapping(true);
     setRemappedData(null);
     setShowRemappedView(false);
     setRemapStatus('processing');
     setRemapMessage('Starting remapper task...');
     setRemapLogs(['Requesting async remap on backend...']);
-    
+
     try {
       const baseUrl = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000').replace(/\/+$/, '');
       const response = await fetch(`${baseUrl}/remap`, {
@@ -305,33 +335,53 @@ export default function App() {
     }
   };
 
+  const safeZipPath = (path) => {
+    const cleaned = String(path || 'file.txt')
+      .replace(/\\/g, '/')
+      .replace(/^\/+/, '')
+      .replace(/(^|\/)\.\.(?=\/|$)/g, '')
+      .replace(/^\/+/, '');
+    return cleaned || 'file.txt';
+  };
+
+  const addCodebaseFilesToZip = (zip, files, prefix) => {
+    Object.entries(files || {}).forEach(([path, content]) => {
+      zip.file(`${prefix}/${safeZipPath(path)}`, String(content ?? ''));
+    });
+  };
+
   const handleExport = async () => {
     if (!results) return;
-    
+
     try {
       const zip = new JSZip();
-      
+
       if (mode === 'generate') {
         zip.file("folder_structure.json", JSON.stringify(results.folder_structure, null, 2));
         zip.file("pin_wiring.json", JSON.stringify(results.pin_wiring, null, 2));
-        zip.file("main_code.cpp", results.starter_code); 
+        zip.file("main_code.cpp", results.starter_code);
         zip.file("README.md", results.readme);
+        addCodebaseFilesToZip(zip, getCodebaseFiles(results), "original_codebase");
         if (remappedData) {
-          zip.file("remapped_pin_wiring.json", JSON.stringify(remappedData.alternative_pin_wiring, null, 2));
-          if (remappedData.alternative_starter_code) {
-            zip.file("remapped_code.py", remappedData.alternative_starter_code);
+          zip.file("remapped_project.json", JSON.stringify(remappedData, null, 2));
+          zip.file("remapped_pin_wiring.json", JSON.stringify(remappedData.pin_wiring || remappedData.alternative_pin_wiring, null, 2));
+          if (remappedData.starter_code || remappedData.alternative_starter_code) {
+            zip.file("remapped_main_code.txt", remappedData.starter_code || remappedData.alternative_starter_code);
           }
           if (remappedData.warnings) {
             zip.file("remap_warnings.txt", remappedData.warnings.join('\n'));
           }
+          addCodebaseFilesToZip(zip, getCodebaseFiles(remappedData), "remapped_codebase");
         }
       } else {
         zip.file("analysis_results.json", JSON.stringify(results, null, 2));
+        addCodebaseFilesToZip(zip, getCodebaseFiles(results), "original_codebase");
         if (remappedData) {
           zip.file("remapped_data.json", JSON.stringify(remappedData, null, 2));
-          if (remappedData.alternative_starter_code) {
-            zip.file("remapped_code.py", remappedData.alternative_starter_code);
+          if (remappedData.starter_code || remappedData.alternative_starter_code) {
+            zip.file("remapped_main_code.txt", remappedData.starter_code || remappedData.alternative_starter_code);
           }
+          addCodebaseFilesToZip(zip, getCodebaseFiles(remappedData), "remapped_codebase");
         }
       }
 
@@ -566,9 +616,9 @@ export default function App() {
       {screen === 'landing' && (
         <div className="landing-container">
           <div className="hero-section">
-            <div className="hero-label">ROBOTICS INTELLIGENCE</div>
+            <div className="hero-label">ROBOTICS CODEBASE BUILDER</div>
             <h1 className="hero-title">
-              Understand any <span className="highlight">robotics codebase</span>
+              Analyze, build, and remap <span className="highlight">robotics codebases</span>
             </h1>
             <p className="hero-subtext">
               Upload your repository for instant analysis, or describe your project to generate a complete robotics starter kit.
@@ -577,13 +627,13 @@ export default function App() {
 
           {/* Mode Toggle */}
           <div className="mode-toggle">
-            <button 
+            <button
               className={`mode-button ${mode === 'analyze' ? 'active' : ''}`}
               onClick={() => setMode('analyze')}
             >
               Analyze a repo
             </button>
-            <button 
+            <button
               className={`mode-button ${mode === 'generate' ? 'active' : ''}`}
               onClick={() => setMode('generate')}
             >
@@ -635,7 +685,7 @@ export default function App() {
                 ⚠️ GitHub URL must point to a <strong>public</strong> repository.
               </p>
 
-              <button 
+              <button
                 className="primary-button"
                 onClick={handleAnalyze}
                 disabled={!file && !githubUrl}
@@ -658,8 +708,8 @@ export default function App() {
 
               <div className="example-chips">
                 {exampleChips.map((chip, i) => (
-                  <button 
-                    key={i} 
+                  <button
+                    key={i}
                     className="chip nm-btn"
                     onClick={() => handleChipClick(chip)}
                   >
@@ -668,7 +718,7 @@ export default function App() {
                 ))}
               </div>
 
-              <button 
+              <button
                 className="primary-button purple"
                 onClick={handleGenerate}
                 disabled={!projectDescription.trim()}
@@ -689,17 +739,17 @@ export default function App() {
           <div className="loading-step">{steps[currentStep]}</div>
           <div className="progress-list">
             {steps.map((step, i) => (
-              <div 
-                key={i} 
+              <div
+                key={i}
                 className={`progress-item ${
-                  i < currentStep ? 'completed' : 
-                  i === currentStep ? 'active' : 
+                  i < currentStep ? 'completed' :
+                  i === currentStep ? 'active' :
                   'pending'
                 }`}
               >
                 <svg className={`progress-icon ${
-                  i < currentStep ? 'completed' : 
-                  i === currentStep ? 'active' : 
+                  i < currentStep ? 'completed' :
+                  i === currentStep ? 'active' :
                   'pending'
                 }`} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   {i < currentStep ? (
@@ -722,16 +772,28 @@ export default function App() {
             <div className="results-title-section">
               <h2>{file?.name || (githubUrl ? githubUrl.replace(/^https?:\/\/(?:www\.)?github\.com\//, '').replace(/\.git\/?$/, '') : 'Generated Project')}</h2>
               <div className="results-subtitle">
-                {mode === 'analyze' ? 'Analyzed' : 'Generated'} via Gemini · {tabs.length} sections ready
+                {showRemappedView && remappedData ? `Remapped for ${remappedData.target_board_name}` : (mode === 'analyze' ? 'Analyzed' : 'Generated')} via Gemini · {tabs.length} sections ready
               </div>
             </div>
-            <button className="export-button nm-btn" onClick={handleExport}>
-              <svg className="export-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 3V16M12 16L16 11.625M12 16L8 11.625" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M15 21H9C7.11438 21 6.17157 21 5.58579 20.4142C5 19.8284 5 18.8856 5 17V16M19 16V17C19 18.8856 19 19.8284 18.4142 20.4142C17.8284 21 16.8856 21 15 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              Export ZIP
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {remappedData && (
+                <div className="mode-toggle" style={{ margin: 0, padding: '0.2rem' }}>
+                  <button className={`mode-button ${!showRemappedView ? 'active' : ''}`} onClick={() => setShowRemappedView(false)} style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', height: 'auto' }}>
+                    Original
+                  </button>
+                  <button className={`mode-button ${showRemappedView ? 'active' : ''}`} onClick={() => setShowRemappedView(true)} style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', height: 'auto' }}>
+                    Remapped
+                  </button>
+                </div>
+              )}
+              <button className="export-button nm-btn" onClick={handleExport}>
+                <svg className="export-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 3V16M12 16L16 11.625M12 16L8 11.625" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M15 21H9C7.11438 21 6.17157 21 5.58579 20.4142C5 19.8284 5 18.8856 5 17V16M19 16V17C19 18.8856 19 19.8284 18.4142 20.4142C17.8284 21 16.8856 21 15 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Export ZIP
+              </button>
+            </div>
           </div>
 
           <div className="results-main-layout">
@@ -772,7 +834,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {activeTab === 0 && (results.architecture || results.file_tree) && (
+                  {activeTab === 0 && (activeResults.architecture || activeResults.file_tree) && (
                     <div className="result-panel nm-card">
                       <div className="panel-header">
                         <svg className="panel-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -781,26 +843,26 @@ export default function App() {
                         <h3 className="panel-title">Architecture</h3>
                       </div>
                       <div className="panel-body">
-                        {results.architecture && (
+                        {activeResults.architecture && (
                           <>
-                            <p>{results.architecture.overview}</p>
-                            {results.architecture.patterns && (
+                            <p>{activeResults.architecture.overview}</p>
+                            {activeResults.architecture.patterns && (
                               <ul style={{ marginTop: '1rem', paddingLeft: '1.5rem' }}>
-                                {results.architecture.patterns.map((pattern, i) => (
+                                {activeResults.architecture.patterns.map((pattern, i) => (
                                   <li key={i} style={{ marginBottom: '0.5rem' }}>{pattern}</li>
                                 ))}
                               </ul>
                             )}
                           </>
                         )}
-                        {results.file_tree && results.file_tree.length > 0 && (
+                        {activeResults.file_tree && activeResults.file_tree.length > 0 && (
                           <div style={{ marginTop: '1.5rem' }}>
                             <p style={{ fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-primary)' }}>
-                              📁 Repository Files ({results.file_tree.length} files detected)
+                              📁 Repository Files ({activeResults.file_tree.length} files detected)
                             </p>
                             <div className="code-block" style={{ maxHeight: '260px', overflowY: 'auto' }}>
                               <pre style={{ fontSize: '0.78rem', lineHeight: '1.7' }}>
-                                {results.file_tree.join('\n')}
+                                {activeResults.file_tree.join('\n')}
                               </pre>
                             </div>
                           </div>
@@ -809,7 +871,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {activeTab === 1 && results.hardware_mapping && (
+                  {activeTab === 1 && activeResults.hardware_mapping && (
                     <div className="result-panel nm-card">
                       <div className="panel-header">
                         <svg className="panel-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -820,15 +882,15 @@ export default function App() {
                       </div>
                       <div className="panel-body">
                         <p style={{ marginBottom: '1.5rem', fontWeight: 500, color: 'var(--text-secondary)' }}>
-                          {results.hardware_mapping.resource_utilization}
+                          {activeResults.hardware_mapping.resource_utilization}
                         </p>
-                        
+
                         <div style={{ overflowX: 'auto', width: '100%', marginBottom: '2rem' }}>
                           <div className="board-visualizer">
                             {/* Left Pins Bank */}
                             <div className="board-pins-bank left">
-                              {(results.pin_wiring ? 
-                                Object.entries(results.pin_wiring).flatMap(([comp, pins]) => 
+                              {(activeResults.pin_wiring ?
+                                Object.entries(activeResults.pin_wiring).flatMap(([comp, pins]) =>
                                   Object.entries(pins).map(([pinName, pinVal]) => ({ component: comp.replace(/_/g, ' '), label: pinName.toUpperCase(), pin: String(pinVal) }))
                                 ) : [
                                   { component: 'SPI Sensor', label: 'MISO', pin: 'Pin 12' },
@@ -865,8 +927,8 @@ export default function App() {
 
                             {/* Right Pins Bank */}
                             <div className="board-pins-bank right">
-                              {(results.pin_wiring ? 
-                                Object.entries(results.pin_wiring).flatMap(([comp, pins]) => 
+                              {(activeResults.pin_wiring ?
+                                Object.entries(activeResults.pin_wiring).flatMap(([comp, pins]) =>
                                   Object.entries(pins).map(([pinName, pinVal]) => ({ component: comp.replace(/_/g, ' '), label: pinName.toUpperCase(), pin: String(pinVal) }))
                                 ) : [
                                   { component: 'SPI Sensor', label: 'MOSI', pin: 'Pin 11' },
@@ -885,7 +947,7 @@ export default function App() {
                         </div>
 
                         <div className="pin-grid">
-                          {results.hardware_mapping.deployment_targets?.map((target, i) => (
+                          {activeResults.hardware_mapping.deployment_targets?.map((target, i) => (
                             <div key={i} className="pin-card">
                               <div className="pin-number">Target {i + 1}</div>
                               <div className="pin-description">{target}</div>
@@ -896,7 +958,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {activeTab === 2 && results.control_flow && (
+                  {activeTab === 2 && activeResults.control_flow && (
                     <div className="result-panel nm-card">
                       <div className="panel-header">
                         <svg className="panel-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -911,8 +973,8 @@ export default function App() {
                           <div className="flow-grid">
                             {[
                               { title: "System Setup / Init", desc: "Setting up pin registers, configuring base frequencies, serial communication baudrate, and diagnostic indicators." },
-                              { title: "Primary Loop Pipeline", desc: results.control_flow.primary_pipeline || "Standard execution iteration." },
-                              { title: "Diagnostic & Error Guards", desc: results.control_flow.error_handling || "Guarding pins against safety constraints." }
+                              { title: "Primary Loop Pipeline", desc: activeResults.control_flow.primary_pipeline || "Standard execution iteration." },
+                              { title: "Diagnostic & Error Guards", desc: activeResults.control_flow.error_handling || "Guarding pins against safety constraints." }
                             ].map((step, idx) => (
                               <div key={idx} className="flow-node-wrapper">
                                 {idx > 0 && (
@@ -932,7 +994,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {activeTab === 3 && results.communication && (
+                  {activeTab === 3 && activeResults.communication && (
                     <div className="result-panel nm-card">
                       <div className="panel-header">
                         <svg className="panel-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -941,12 +1003,12 @@ export default function App() {
                         <h3 className="panel-title">Communication</h3>
                       </div>
                       <div className="panel-body">
-                        <p><strong>Internal:</strong> {results.communication.internal}</p>
-                        {results.communication.protocols && (
+                        <p><strong>Internal:</strong> {activeResults.communication.internal}</p>
+                        {activeResults.communication.protocols && (
                           <div style={{ marginTop: '1rem' }}>
                             <strong>Protocols:</strong>
                             <ul style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
-                              {results.communication.protocols.map((protocol, i) => (
+                              {activeResults.communication.protocols.map((protocol, i) => (
                                 <li key={i}>{protocol}</li>
                               ))}
                             </ul>
@@ -956,7 +1018,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {activeTab === 4 && results.risks && (
+                  {activeTab === 4 && activeResults.risks && (
                     <div className="result-panel nm-card">
                       <div className="panel-header">
                         <svg className="panel-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -965,7 +1027,7 @@ export default function App() {
                         <h3 className="panel-title">Risks</h3>
                       </div>
                       <div className="risk-list">
-                        {results.risks.map((risk, i) => (
+                        {activeResults.risks.map((risk, i) => (
                           <div key={i} className="risk-item">
                             <span className={`risk-badge ${i % 3 === 0 ? 'high' : i % 3 === 1 ? 'medium' : 'low'}`}>
                               {i % 3 === 0 ? 'HIGH' : i % 3 === 1 ? 'MEDIUM' : 'LOW'}
@@ -977,7 +1039,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {activeTab === 5 && results.onboarding_summary && (
+                  {activeTab === 5 && activeResults.onboarding_summary && (
                     <div className="result-panel nm-card">
                       <div className="panel-header">
                         <svg className="panel-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -988,12 +1050,12 @@ export default function App() {
                         <h3 className="panel-title">Onboarding Summary</h3>
                       </div>
                       <div className="panel-body">
-                        <p>{results.onboarding_summary.tldr}</p>
-                        {results.onboarding_summary.key_files && (
+                        <p>{activeResults.onboarding_summary.tldr}</p>
+                        {activeResults.onboarding_summary.key_files && (
                           <div style={{ marginTop: '1rem' }}>
                             <strong>Key Files:</strong>
                             <ul style={{ marginTop: '0.5rem', paddingLeft: '1.5rem' }}>
-                              {results.onboarding_summary.key_files.map((file, i) => (
+                              {activeResults.onboarding_summary.key_files.map((file, i) => (
                                 <li key={i}>{file}</li>
                               ))}
                             </ul>
@@ -1002,21 +1064,24 @@ export default function App() {
                       </div>
                     </div>
                   )}
-                  {activeTab === 6 && remappedData && (
+                  {activeTab === 6 && Object.keys(activeCodebaseFiles).length > 0 && (
                     <div className="result-panel nm-card">
                       <div className="panel-header">
                         <svg className="panel-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <path d="M16 18L22 12L16 6M8 6L2 12L8 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                         </svg>
-                        <h3 className="panel-title">Remapped Starter Code</h3>
+                        <h3 className="panel-title">{showRemappedView ? 'Remapped Codebase' : 'Codebase'}</h3>
                       </div>
                       <div className="panel-body">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', gap: '1rem', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                            🚀 Rebuilt automatically for <strong>{remappedData.target_board_name}</strong>
+                            {showRemappedView && remappedData
+                              ? <>🚀 Entire codebase rebuilt for <strong>{remappedData.target_board_name}</strong></>
+                              : <>📦 {Object.keys(activeCodebaseFiles).length} source/config/doc files captured</>
+                            }
                           </span>
                         </div>
-                        {remappedData.warnings && remappedData.warnings.length > 0 && (
+                        {showRemappedView && remappedData?.warnings && remappedData.warnings.length > 0 && (
                           <div className="remap-warning-box" style={{ marginBottom: '1.5rem' }}>
                             <div className="remap-warning-title">⚠️ Rebuild Warnings & Setup Details</div>
                             <ul className="remap-warning-list">
@@ -1026,9 +1091,16 @@ export default function App() {
                             </ul>
                           </div>
                         )}
-                        <div className="code-block">
-                          <pre>{remappedData.alternative_starter_code}</pre>
-                        </div>
+                        {Object.entries(activeCodebaseFiles).map(([path, content]) => (
+                          <div key={path} style={{ marginBottom: '1.25rem' }}>
+                            <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>
+                              {path}
+                            </div>
+                            <div className="code-block">
+                              <pre>{content}</pre>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -1037,7 +1109,7 @@ export default function App() {
 
               {mode === 'generate' && (
                 <>
-                  {activeTab === 0 && results.folder_structure && (
+                  {activeTab === 0 && activeResults.folder_structure && (
                     <div className="result-panel nm-card">
                       <div className="panel-header">
                         <svg className="panel-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1046,15 +1118,13 @@ export default function App() {
                         <h3 className="panel-title">Project Structure</h3>
                       </div>
                       <div className="code-block">
-                        <pre>{JSON.stringify(results.folder_structure, null, 2)}</pre>
+                        <pre>{JSON.stringify(activeResults.folder_structure, null, 2)}</pre>
                       </div>
                     </div>
                   )}
 
-                  {activeTab === 1 && results.pin_wiring && (() => {
-                    const activePinsGen = (showRemappedView && remappedData)
-                      ? remappedData.alternative_pin_wiring
-                      : results.pin_wiring;
+                  {activeTab === 1 && activeResults.pin_wiring && (() => {
+                    const activePinsGen = activeResults.pin_wiring || {};
 
                     const connectionsGen = [];
                     if (activePinsGen) {
@@ -1174,7 +1244,7 @@ export default function App() {
                     );
                   })()}
 
-                  {activeTab === 2 && results.starter_code && (
+                  {activeTab === 2 && activeResults.starter_code && (
                     <div className="result-panel nm-card">
                       <div className="panel-header" style={{ justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -1195,12 +1265,12 @@ export default function App() {
                         )}
                       </div>
                       <div className="code-block">
-                        <pre>{(showRemappedView && remappedData) ? remappedData.alternative_starter_code : results.starter_code}</pre>
+                        <pre>{activeResults.starter_code}</pre>
                       </div>
                     </div>
                   )}
 
-                  {activeTab === 3 && results.readme && (
+                  {activeTab === 3 && activeResults.readme && (
                     <div className="result-panel nm-card">
                       <div className="panel-header">
                         <svg className="panel-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1210,7 +1280,39 @@ export default function App() {
                         <h3 className="panel-title">README</h3>
                       </div>
                       <div className="code-block">
-                        <pre>{results.readme}</pre>
+                        <pre>{activeResults.readme}</pre>
+                      </div>
+                    </div>
+                  )}
+                  {activeTab === 4 && Object.keys(activeCodebaseFiles).length > 0 && (
+                    <div className="result-panel nm-card">
+                      <div className="panel-header">
+                        <svg className="panel-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M16 18L22 12L16 6M8 6L2 12L8 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        <h3 className="panel-title">{showRemappedView ? 'Remapped Codebase' : 'Codebase'}</h3>
+                      </div>
+                      <div className="panel-body">
+                        {showRemappedView && remappedData?.warnings && remappedData.warnings.length > 0 && (
+                          <div className="remap-warning-box" style={{ marginBottom: '1.5rem' }}>
+                            <div className="remap-warning-title">⚠️ Rebuild Warnings & Setup Details</div>
+                            <ul className="remap-warning-list">
+                              {remappedData.warnings.map((warn, i) => (
+                                <li key={i}>{warn}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {Object.entries(activeCodebaseFiles).map(([path, content]) => (
+                          <div key={path} style={{ marginBottom: '1.25rem' }}>
+                            <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>
+                              {path}
+                            </div>
+                            <div className="code-block">
+                              <pre>{content}</pre>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -1223,7 +1325,7 @@ export default function App() {
                   🔄 Alternative Hardware Remaker
                 </h3>
                 <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.25rem', lineHeight: '1.4' }}>
-                  Remap this entire project's pin mappings, dependencies, starter code, and voltage tolerances to any board you have available!
+                  Remap the entire codebase plus hardware map, control flow, communication model, dependencies, and voltage tolerances to any board you have available!
                 </p>
                 <div className="remaker-input-row">
                   <textarea
@@ -1233,8 +1335,8 @@ export default function App() {
                     onChange={(e) => setRemapTarget(e.target.value)}
                     disabled={isRemapping}
                   />
-                  <button 
-                    className="nm-btn remaker-btn" 
+                  <button
+                    className="nm-btn remaker-btn"
                     onClick={handleRemap}
                     disabled={isRemapping || !remapTarget.trim()}
                     style={{ background: 'var(--gradient-primary)', color: 'white', border: 'none' }}
@@ -1311,7 +1413,7 @@ export default function App() {
                   </label>
                 ))}
               </div>
-              
+
               {/* GitHub Call-to-Action */}
               <div className="github-cta" style={{ cursor: 'pointer' }} onClick={() => setIsGitModalOpen(true)}>
                 <svg className="github-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1358,8 +1460,8 @@ export default function App() {
                 <div className="git-step-title">{step.title}</div>
                 <div className="git-code-box">
                   <span>{step.cmd}</span>
-                  <button 
-                    className="git-copy-btn" 
+                  <button
+                    className="git-copy-btn"
                     onClick={() => {
                       navigator.clipboard.writeText(step.cmd);
                       alert(`Copied: ${step.cmd}`);
