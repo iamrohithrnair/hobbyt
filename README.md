@@ -1,22 +1,56 @@
-# Hobbyt – Gemini Repository Analyzer with Robotics Project Generator
+# Hobbyt
 
-A powerful FastAPI-based application that combines repository analysis with AI-powered robotics project generation using Google Gemini and the Agent Development Kit (ADK).
+**Hobbyt is an AI-powered robotics companion that lets you understand any robot's codebase in seconds and build new ones from a single sentence.** Drop in a `.zip` or a GitHub link and Hobbyt's Gemini-powered agent instantly maps the architecture, GPIO pins, control loops, and communication buses — then lets you migrate the entire project to a different board with one click. Or skip straight to creating: describe your robot in plain English and walk away with production-ready starter code, wiring diagrams, and a step-by-step build checklist. Powered by Google Gemini and the Agent Development Kit (ADK).
 
-## Features
+---
 
-### 1. Repository Analysis
-- Real-time code analysis using Google ADK agent
-- Live updates via polling endpoint
-- Comprehensive insights on architecture, hardware mapping, and risks
+## 🔄 What You Can Do with Hobbyt (Step-by-Step)
 
-### 2. Robotics Project Generator
-- **AI-Powered Generation**: Uses Google Gemini (`gemini-3.1-flash-lite`)
-- **Plain English Input**: Describe your project in natural language
-- **Complete Project Output**: 
-  - Folder structure
-  - Pin wiring diagrams
-  - Starter code (Arduino/Python)
-  - Comprehensive README documentation
+Here is a step-by-step walkthrough of everything you can do with Hobbyt:
+
+### Phase 1: Auditing & Discovering an Existing Robot
+If you have an existing codebase or found a public project you want to understand:
+1. **Analyze a Codebase**: 
+   - Upload a `.zip` archive of your firmware/software files OR paste a public **GitHub Repository URL** and click **Fetch**.
+2. **Track Live Reasoning Progress**:
+   - Watch the Google ADK Agent reason through your codebase in real-time with visual step-by-step diagnostics (e.g., *Reading repository structure*, *Mapping hardware & GPIO*, *Scanning for risks*).
+3. **Explore Architectural Patterns**:
+   - Inspect the auto-generated **Architecture Overview** to see detected design patterns and tech stacks, and browse the full file list directly in the code visualizer.
+4. **Interactive GPIO & Pin Wiring Map**:
+   - Inspect the physical layout of your board. View a detailed table displaying physical component pinouts, target board GPIO pins, and resource descriptions.
+5. **Trace Control Flow & Communication**:
+   - Dive into the **Control Flow** tab to map your primary execution pipeline, ISR loops, and error-handling strategies. Check the **Comms** tab for active protocols (I2C, SPI, UART, CAN).
+6. **Mitigate Risks & Onboard Developers**:
+   - Read the **Risks** tab for voltage conflicts, memory bottlenecks, or outdated libraries. Head to the **Onboarding** tab for a quick-start "TL;DR" pitch and key files to review first.
+
+### Phase 2: Hardware Migration & Code Rebuilding
+If you need to migrate your analyzed codebase to another processor or convert APIs:
+7. **Initiate an Asynchronous Remap/Rebuild**:
+   - In the results panel, locate the **Hardware Remapping Engine** form.
+   - Input your remapping goals (e.g., *"Convert this ESP32 C++ code into a Raspberry Pi 4 Python app using gpiozero"*, or *"Upgrade the older Claude-based API service calls to the modern Google GenAI SDK"*).
+8. **Monitor Background Remap Logs**:
+   - Watch real-time terminal output logs stream directly on the UI as Hobbyt’s background remapping agent designs alternative schematics and synthesizes code.
+9. **Review Rebuilt Assets**:
+   - Inspect the newly generated **Target Board Name**, **Alternative Pin Wiring Layout**, **Alternative Starter Code**, and crucial **Hardware Warnings** (e.g., logic level shifters required, voltage differences like 3.3V vs 5V).
+
+### Phase 3: Creating New Robots from Scratch
+If you want to start a brand new project:
+10. **Describe Your Vision**:
+    - Switch to **Start a project** mode.
+    - Type your idea in natural language (e.g., *"Arduino Uno, 2 DC motors, IR sensor, line follower robot"*) or click one of the interactive quick-chips.
+11. **Generate the Starter Kit**:
+    - Watch the generator plan the project structure, map pins, and compile files in seconds.
+12. **Interact with the Project Structure**:
+    - Browse the auto-generated, collapsible directory tree containing starter code, libraries, documents, and examples.
+13. **Follow the Wiring Layout & Starter Code**:
+    - View the precise pin diagram showing how to wire your physical components. Copy or read the clean, annotated starter code directly in the code editor.
+14. **Track Physical Build Progress**:
+    - Follow the interactive **Build Roadmap** checklist on the right sidebar to track physical assembly (*Assemble Chassis*, *Connect Jumper Wires*, *Upload Code*, *Initial Test Run*).
+15. **Export Your Deliverables**:
+    - Click **Export ZIP** to download a beautifully packaged archive containing the folder structure, pin wiring diagrams, starter code, and manuals.
+
+---
+
 
 ## Quick Start
 
