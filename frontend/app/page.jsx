@@ -116,6 +116,11 @@ export default function App() {
               setRemappedData(data.data);
               setShowRemappedView(true);
               setIsRemapping(false);
+              if (mode === 'analyze') {
+                setActiveTab(6);
+              } else {
+                setActiveTab(1);
+              }
               clearInterval(interval);
             } else if (data.status === 'failed') {
               setIsRemapping(false);
@@ -128,7 +133,7 @@ export default function App() {
       }, 2000);
     }
     return () => clearInterval(interval);
-  }, [remapStatus]);
+  }, [remapStatus, mode]);
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -260,6 +265,8 @@ export default function App() {
     if (!remapTarget.trim() || !results) return;
     
     setIsRemapping(true);
+    setRemappedData(null);
+    setShowRemappedView(false);
     setRemapStatus('processing');
     setRemapMessage('Starting remapper task...');
     setRemapLogs(['Requesting async remap on backend...']);
@@ -309,8 +316,23 @@ export default function App() {
         zip.file("pin_wiring.json", JSON.stringify(results.pin_wiring, null, 2));
         zip.file("main_code.cpp", results.starter_code); 
         zip.file("README.md", results.readme);
+        if (remappedData) {
+          zip.file("remapped_pin_wiring.json", JSON.stringify(remappedData.alternative_pin_wiring, null, 2));
+          if (remappedData.alternative_starter_code) {
+            zip.file("remapped_code.py", remappedData.alternative_starter_code);
+          }
+          if (remappedData.warnings) {
+            zip.file("remap_warnings.txt", remappedData.warnings.join('\n'));
+          }
+        }
       } else {
         zip.file("analysis_results.json", JSON.stringify(results, null, 2));
+        if (remappedData) {
+          zip.file("remapped_data.json", JSON.stringify(remappedData, null, 2));
+          if (remappedData.alternative_starter_code) {
+            zip.file("remapped_code.py", remappedData.alternative_starter_code);
+          }
+        }
       }
 
       const content = await zip.generateAsync({ type: "blob" });
@@ -336,6 +358,13 @@ export default function App() {
     setResults(null);
     setActiveTab(0);
     setCurrentStep(0);
+    setRemapTarget('');
+    setIsRemapping(false);
+    setRemappedData(null);
+    setShowRemappedView(false);
+    setRemapStatus('idle');
+    setRemapMessage('');
+    setRemapLogs([]);
   };
 
   const toggleBuildTask = (taskId) => {
@@ -691,7 +720,7 @@ export default function App() {
         <div className="results-container">
           <div className="results-header nm-card">
             <div className="results-title-section">
-              <h2>{file?.name || 'Generated Project'}</h2>
+              <h2>{file?.name || (githubUrl ? githubUrl.replace(/^https?:\/\/(?:www\.)?github\.com\//, '').replace(/\.git\/?$/, '') : 'Generated Project')}</h2>
               <div className="results-subtitle">
                 {mode === 'analyze' ? 'Analyzed' : 'Generated'} via Gemini · {tabs.length} sections ready
               </div>
@@ -1128,11 +1157,14 @@ export default function App() {
                               <div key={component} className="pin-card">
                                 <div className="pin-number">{component.replace(/_/g, ' ').toUpperCase()}</div>
                                 <div className="pin-description">
-                                  {Object.entries(pins).map(([pin, value]) => (
-                                    <div key={pin} style={{ marginBottom: '0.25rem' }}>
-                                      <strong>{pin}:</strong> {String(value)}
-                                    </div>
-                                  ))}
+                                  {typeof pins === 'object' && pins !== null
+                                    ? Object.entries(pins).map(([pin, value]) => (
+                                        <div key={pin} style={{ marginBottom: '0.25rem' }}>
+                                          <strong>{pin}:</strong> {String(value)}
+                                        </div>
+                                      ))
+                                    : <div>{String(pins)}</div>
+                                  }
                                 </div>
                               </div>
                             ))}
