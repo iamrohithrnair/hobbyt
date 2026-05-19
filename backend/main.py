@@ -379,7 +379,12 @@ def run_async_remap(target_hardware: str, current_context: Dict[str, Any]):
         
         GeminiStorage.add_remap_log("Step 4/5: Synthesizing board pins mapping configuration headers...")
         
-        client = get_gemini_client()
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY must be set in .env file")
+        client = genai.Client(api_key=api_key)
+        remap_context = {k: v for k, v in current_context.items() if k != "file_tree"}
+        
         prompt = f"""You are a professional robotics hardware engineer and expert software/firmware developer.
 Your task is to remap, convert, and rebuild an existing robotics project based on the user's instructions.
 The instructions can request HARDWARE changes (e.g., migrating from ESP32 to Raspberry Pi Pico or Raspberry Pi 4/5), SOFTWARE changes (e.g., changing APIs from Anthropic Claude SDK to Google Gemini SDK, adding logic, modifying functionality), or BOTH.
@@ -388,7 +393,7 @@ Remap & Rebuild Instructions:
 {target_hardware}
 
 Current Project Context:
-{json.dumps(current_context, indent=2)}
+{json.dumps(remap_context, indent=2)}
 
 Please perform the rebuild and remapping. 
 Rules:
